@@ -2,11 +2,11 @@ import subprocess
 import sys
 
 # 필요한 패키지가 설치되어 있는지 확인
-try:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "selenium", "webdriver_manager", "pandas", "openpyxl", "tqdm", "keyboard"])
-except subprocess.CalledProcessError as e:
-    print(f"Error installing packages: {e}")
-    sys.exit(1)
+# try:
+#     subprocess.check_call([sys.executable, "-m", "pip", "install", "selenium", "webdriver_manager", "pandas", "openpyxl", "tqdm", "keyboard"])
+# except subprocess.CalledProcessError as e:
+#     print(f"Error installing packages: {e}")
+#     sys.exit(1)
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -59,35 +59,52 @@ def wait_for_page_load(driver, timeout=30):  # 대기 시간을 30초로 늘림
     except TimeoutException:
         logging.warning("Page did not load properly")
 
+def get_text_or_null(driver, xpath):
+    try:
+        element = driver.find_element(By.XPATH, xpath)
+        return element.text.strip() if element else None
+    except NoSuchElementException:
+        return None
+
 def get_company_details(driver, company_url):
-    # 회사 세부 정보를 가져옴
     try:
         driver.get(company_url)
         
-        exhibitor = wait_for_element(driver, "h1.text-3xl.font-medium.leading-none.lg:text-5xl.font-black.font-heading")
-        exhibitor = exhibitor.text.strip() if exhibitor else ""
+        exhibitor = get_text_or_null(driver, '//*[@id="headerContainer"]/div/div[3]/nav/ul/li[5]')
         
-        information = wait_for_element(driver, "#maincontent > div")
-        information = information.text.strip() if information else ""
+        exhibitor_header = [
+            get_text_or_null(driver, '//*[@id="exhibitor-header"]/div/div[2]/div[1]/span[1]/span'),
+            get_text_or_null(driver, '//*[@id="exhibitor-header"]/div/div[2]/div[1]/span[2]/span'),
+            get_text_or_null(driver, '//*[@id="exhibitor-header"]/div/div[2]/div[1]/span[3]/span'),
+            get_text_or_null(driver, '//*[@id="exhibitor-header"]/div/div[2]/div[1]/span[4]/span')
+        ]
         
-        location = ""
-        interests = ""
+        information = get_text_or_null(driver, '//*[@id="maincontent"]/div')
         
-        aside_elements = driver.find_elements(By.CSS_SELECTOR, "#exhibitor-container > aside > div")
-        for element in aside_elements:
-            heading = element.find_element(By.CSS_SELECTOR, "h2").text.strip()
-            if heading == "Location":
-                location_elements = element.find_elements(By.CSS_SELECTOR, "ul li")
-                location = ", ".join([loc.text.strip() for loc in location_elements])
+        link = [None] * 6
+        location = [None] * 6
+        interests = [None] * 6
+        
+        aside_elements = driver.find_elements(By.XPATH, '//*[@id="exhibitor-container"]/aside/div')
+        for i, element in enumerate(aside_elements, start=1):
+            heading = get_text_or_null(driver, f'//*[@id="exhibitor-container"]/aside/div[{i}]/h5')
+            if heading == "Contacts & Links":
+                for j in range(1, 7):
+                    link[j-1] = get_text_or_null(driver, f'//*[@id="exhibitor-container"]/aside/div[{i}]/ul/li[{j}]/a')
+            elif heading == "Location":
+                for j in range(1, 7):
+                    location[j-1] = get_text_or_null(driver, f'//*[@id="exhibitor-container"]/aside/div[{i}]/ul/li[{j}]/a')
             elif heading == "Interests":
-                interests_elements = element.find_elements(By.CSS_SELECTOR, "ul li")
-                interests = ", ".join([int.text.strip() for int in interests_elements])
-
+                for j in range(1, 7):
+                    interests[j-1] = get_text_or_null(driver, f'//*[@id="exhibitor-container"]/aside/div[{i}]/ul/li[{j}]')
+        
         return {
-            "Exhibitors": exhibitor,
+            "Exhibitor": exhibitor,
+            "Exhibitor Header": exhibitor_header,
+            "Information": information,
+            "Links": link,
             "Location": location,
             "Interests": interests,
-            "Information": information,
             "Remarks": ""
         }
     except Exception as e:
@@ -123,6 +140,14 @@ def create_excel_file(data, filename="mwc_exhibitors.xlsx"):
     writer.close()
     logging.info(f"Excel file '{filename}' created successfully.")
 
+def get_chromedriver_version():
+    try:
+        version = subprocess.check_output(["chromedriver", "--version"]).decode("utf-8").strip()
+        return version
+    except subprocess.CalledProcessError as e:
+        print(f"Error getting chromedriver version: {e}")
+        return None
+
 def main():
     driver = setup_driver()
     all_companies = []
@@ -138,36 +163,27 @@ def main():
                 try:
                     driver.get(url)
                     wait_for_page_load(driver, timeout=30)  # 대기 시간을 30초로 늘림
-                    company_links = driver.find_elements(By.CSS_SELECTOR, "div.exhibitor-card a")
-                    if not company_links:
-                        if page > 1:
-                            logging.info("Reached the last page.")
-                            break
-                        else:
-                            retries += 1
-                            continue
                     
-                    logging.info(f"Processing page {page} ({len(company_links)} companies)")
-                    
-                    for link in tqdm(company_links, desc=f"Page {page}"):
-                        company_url = link.get_attribute('href')
-                        driver.get(company_url)  # 회사의 세부 페이지로 이동
-                        
-                        # 스페이스바 입력 대기
-                        print("Press the spacebar to continue...")
-                        keyboard.wait('space')
-                        
-                        company_data = get_company_details(driver, company_url)
-                        if company_data:
-                            all_companies.append(company_data)
-                        
-                        # 이전 페이지로 이동
-                        driver.back()
-                        wait_for_page_load(driver, timeout=30)  # 대기 시간을 30초로 늘림
-                        
-                        # 스페이스바 입력 대기
-                        print("Press the spacebar to continue to the next company...")
-                        keyboard.wait('space')
+                    for i in range(1, 25):  # 24번 반복
+                        xpath = f'//*[@id="traversable-list-2526362"]/ul/a[{i}]'
+                        print(f"Processing XPath URL: {xpath}")
+                        try:
+                            link = wait_for_element(driver, xpath, by=By.XPATH)
+                            if link:
+                                link.click()
+                                wait_for_page_load(driver, timeout=30)  # 페이지가 완전히 로드될 때까지 대기
+                                
+                                company_data = get_company_details(driver, driver.current_url)
+                                if company_data:
+                                    all_companies.append(company_data)
+                                
+                                # 이전 페이지로 이동
+                                driver.back()
+                                wait_for_page_load(driver, timeout=30)  # 페이지가 완전히 로드될 때까지 대기
+                            else:
+                                logging.warning(f"Link not found for XPath: {xpath}")
+                        except Exception as e:
+                            logging.error(f"Error processing link with XPath {xpath}: {str(e)}")
                     
                     page += 1
                     next_page_button = wait_for_element(driver, '//*[@id="item-links-2526362"]/div[3]/div/ul/li[7]/a', by=By.XPATH)
@@ -198,4 +214,9 @@ def main():
             logging.warning("No companies were processed.")
 
 if __name__ == "__main__":
+    version = get_chromedriver_version()
+    if version:
+        print(f"Chromedriver version: {version}")
+    else:
+        print("Could not determine chromedriver version.")
     main()

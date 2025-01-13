@@ -1,0 +1,74 @@
+1. exhibitor : 아래 1개의 xpath 에서 text 추출
+//*[@id="headerContainer"]/div/div[3]/nav/ul/li[5]
+
+2. exhibitor-header : 아래 4개의 xpath 에서 text 추출
+//*[@id="exhibitor-header"]/div/div[2]/div[1]/span[1]/span : exhibitor-header[0]에 text 저장 (값이 없으면 null 저장)
+//*[@id="exhibitor-header"]/div/div[2]/div[1]/span[2]/span : exhibitor-header[1]에 text 저장 (값이 없으면 null 저장)
+//*[@id="exhibitor-header"]/div/div[2]/div[1]/span[3]/span : exhibitor-header[2]에 text 저장 (값이 없으면 null 저장)
+//*[@id="exhibitor-header"]/div/div[2]/div[1]/span[4]/span : exhibitor-header[3]에 text 저장 (값이 없으면 null 저장)
+        
+3. Information : text 추출
+//*[@id="maincontent"]/div : Information 에 text 저장
+
+4. xPath: //*[@id="exhibitor-container"]/aside/div[i]/h5 의 text 가 
+Contacts & Links 이면, 아래 6개의 xpath 에서 URL 정보 text 추출해서 link 배열에 저장 
+or Location 이면, 아래 6개의 xpath 에서 text 추출해서 location 배열에 저장
+or Interests 이면, 아래 6개의 xpath 에서 text 추출해서 Interests 배열에 저장 
+//*[@id="exhibitor-container"]/aside/div[1]/ul/li[1]/a/span : link[0]에 text 저장 (값이 없으면 null 저장)
+//*[@id="exhibitor-container"]/aside/div[1]/ul/li[2]/a : link[1]에 text 저장 (값이 없으면 null 저장)
+//*[@id="exhibitor-container"]/aside/div[1]/ul/li[3]/a : link[2]에 text 저장 (값이 없으면 null 저장)
+//*[@id="exhibitor-container"]/aside/div[1]/ul/li[4]/a : link[3]에 text 저장 (값이 없으면 null 저장)
+//*[@id="exhibitor-container"]/aside/div[1]/ul/li[5]/a : link[4]에 text 저장 (값이 없으면 null 저장)
+//*[@id="exhibitor-container"]/aside/div[1]/ul/li[6]/a : link[5]에 text 저장 (값이 없으면 null 저장)
+
+//*[@id="exhibitor-container"]/aside/div[1]/ul/li[1]/a/span : location[0]에 text 저장 (값이 없으면 null 저장)
+//*[@id="exhibitor-container"]/aside/div[1]/ul/li[2]/a : location[1]에 text 저장 (값이 없으면 null 저장)
+//*[@id="exhibitor-container"]/aside/div[1]/ul/li[3]/a : location[2]에 text 저장 (값이 없으면 null 저장)
+//*[@id="exhibitor-container"]/aside/div[1]/ul/li[4]/a : location[3]에 text 저장 (값이 없으면 null 저장)
+//*[@id="exhibitor-container"]/aside/div[1]/ul/li[5]/a : location[4]에 text 저장 (값이 없으면 null 저장)
+//*[@id="exhibitor-container"]/aside/div[1]/ul/li[6]/a : location[5]에 text 저장 (값이 없으면 null 저장)
+
+//*[@id="exhibitor-container"]/aside/div[1]/ul/li[1]/a/span : location[0]에 text 저장 (값이 없으면 null 저장)
+//*[@id="exhibitor-container"]/aside/div[1]/ul/li[2]/a : location[1]에 text 저장 (값이 없으면 null 저장)
+//*[@id="exhibitor-container"]/aside/div[1]/ul/li[3]/a : location[2]에 text 저장 (값이 없으면 null 저장)
+//*[@id="exhibitor-container"]/aside/div[1]/ul/li[4]/a : location[3]에 text 저장 (값이 없으면 null 저장)
+//*[@id="exhibitor-container"]/aside/div[1]/ul/li[5]/a : location[4]에 text 저장 (값이 없으면 null 저장)
+//*[@id="exhibitor-container"]/aside/div[1]/ul/li[6]/a : location[5]에 text 저장 (값이 없으면 null 저장)
+
+//*[@id="exhibitor-container"]/aside/div[2]/ul/li[1] : Interests[0]에 text 저장 (값이 없으면 null 저장)
+//*[@id="exhibitor-container"]/aside/div[2]/ul/li[2] : Interests[1]에 text 저장 (값이 없으면 null 저장)
+//*[@id="exhibitor-container"]/aside/div[2]/ul/li[3] : Interests[2]에 text 저장 (값이 없으면 null 저장)
+//*[@id="exhibitor-container"]/aside/div[2]/ul/li[4] : Interests[3]에 text 저장 (값이 없으면 null 저장)
+//*[@id="exhibitor-container"]/aside/div[2]/ul/li[5] : Interests[4]에 text 저장 (값이 없으면 null 저장)
+//*[@id="exhibitor-container"]/aside/div[2]/ul/li[6] : Interests[5]에 text 저장 (값이 없으면 null 저장)
+
+
+5. exhibitor, exhibitor-header, Information, link[0]~link[6], location[0]~location[6], Interests[0]~Interests[6] 순으로 엑셀 파일에 한행으로 저장하는 code 로 수정해줘.
+
+
+
+Erisson 업체명
+//*[@id="headerContainer"]/div/div[3]/nav/ul/li[5]
+
+//*[@id="exhibitor-header"]/div/div[2]/div[1]/span[1]/span
+
+info
+//*[@id="maincontent"]/div
+
+Contacts & Links: //*[@id="exhibitor-container"]/aside/div[1]/h5
+//*[@id="exhibitor-container"]/aside/div[1]/ul/li[1]/a/span
+//*[@id="exhibitor-container"]/aside/div[1]/ul/li[2]/a
+//*[@id="exhibitor-container"]/aside/div[1]/ul/li[3]/a
+//*[@id="exhibitor-container"]/aside/div[1]/ul/li[4]/a
+
+Location: //*[@id="exhibitor-container"]/aside/div[2]/h5
+//*[@id="exhibitor-container"]/aside/div[2]/ul/p[1]
+//*[@id="exhibitor-container"]/aside/div[2]/ul/p[2]
+//*[@id="exhibitor-container"]/aside/div[2]/ul/p[3]
+//*[@id="exhibitor-container"]/aside/div[2]/ul/p[4]
+
+Interests : //*[@id="exhibitor-container"]/aside/div[3]/h5
+//*[@id="exhibitor-container"]/aside/div[2]/ul/li[1]
+//*[@id="exhibitor-container"]/aside/div[2]/ul/li[2]
+//*[@id="exhibitor-container"]/aside/div[2]/ul/li[3]
+//*[@id="exhibitor-container"]/aside/div[2]/ul/li[4]

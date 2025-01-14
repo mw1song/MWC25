@@ -1,5 +1,8 @@
 import subprocess
 import sys
+import signal
+import warnings  # 경고 무시를 위한 모듈 추가
+import os  # 파일 경로 처리를 위한 모듈 추가
 
 # 필요한 패키지가 설치되어 있는지 확인
 # try:
@@ -7,6 +10,9 @@ import sys
 # except subprocess.CalledProcessError as e:
 #     print(f"Error installing packages: {e}")
 #     sys.exit(1)
+
+# 경고 메시지 무시 설정
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -20,7 +26,6 @@ import openpyxl
 from openpyxl.styles import Font
 from tqdm import tqdm
 import logging
-import os
 from selenium.webdriver.chrome.service import Service
 import keyboard  # 키보드 입력을 감지하기 위한 라이브러리
 
@@ -38,6 +43,17 @@ def setup_driver():
     service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=options)
     return driver
+
+def accept_cookies(driver):
+    try:
+        accept_button = wait_for_element(driver, 'button.accept-cookies', timeout=10)
+        if accept_button:
+            accept_button.click()
+            logging.info("Accepted cookies.")
+        else:
+            logging.info("No cookies acceptance button found.")
+    except Exception as e:
+        logging.error(f"Error accepting cookies: {str(e)}")
 
 def wait_for_element(driver, selector, by=By.CSS_SELECTOR, timeout=10):
     # 특정 요소가 나타날 때까지 대기
@@ -62,15 +78,16 @@ def wait_for_page_load(driver, timeout=30):  # 대기 시간을 30초로 늘림
 def get_text_or_null(driver, xpath):
     try:
         element = driver.find_element(By.XPATH, xpath)
-        return element.text.strip() if element else None
+        return element.text.strip() if element else "N/A"
     except NoSuchElementException:
-        return None
+        return "N/A"
 
 def get_company_details(driver, company_url):
     try:
         driver.get(company_url)
         
         exhibitor = get_text_or_null(driver, '//*[@id="headerContainer"]/div/div[3]/nav/ul/li[5]')
+        print(f"Exhibitor: {exhibitor}")
         
         exhibitor_header = [
             get_text_or_null(driver, '//*[@id="exhibitor-header"]/div/div[2]/div[1]/span[1]/span'),
@@ -81,35 +98,51 @@ def get_company_details(driver, company_url):
         
         information = get_text_or_null(driver, '//*[@id="maincontent"]/div')
         
-        link = [None] * 6
-        location = [None] * 6
-        interests = [None] * 6
+        links = []
+        locations = []
+        interests = []
         
         aside_elements = driver.find_elements(By.XPATH, '//*[@id="exhibitor-container"]/aside/div')
         for i, element in enumerate(aside_elements, start=1):
             heading = get_text_or_null(driver, f'//*[@id="exhibitor-container"]/aside/div[{i}]/h5')
-            if heading == "Contacts & Links":
-                for j in range(1, 7):
-                    link[j-1] = get_text_or_null(driver, f'//*[@id="exhibitor-container"]/aside/div[{i}]/ul/li[{j}]/a')
-            elif heading == "Location":
-                for j in range(1, 7):
-                    location[j-1] = get_text_or_null(driver, f'//*[@id="exhibitor-container"]/aside/div[{i}]/ul/li[{j}]/a')
-            elif heading == "Interests":
-                for j in range(1, 7):
-                    interests[j-1] = get_text_or_null(driver, f'//*[@id="exhibitor-container"]/aside/div[{i}]/ul/li[{j}]')
+            print(f"Heading: {heading}")
+            if heading == "CONTACTS & LINKS":
+                link_elements = driver.find_elements(By.XPATH, f'//*[@id="exhibitor-container"]/aside/div[{i}]/ul/li/a')
+                links = [link.text.strip() for link in link_elements]
+            elif heading == "LOCATION":
+                location_elements = driver.find_elements(By.XPATH, f'//*[@id="exhibitor-container"]/aside/div[{i}]/ul/p')
+                locations = [location.text.strip() for location in location_elements]
+            elif heading == "INTERESTS":
+                interest_elements = driver.find_elements(By.XPATH, f'//*[@id="exhibitor-container"]/aside/div[{i}]/ul/li')
+                interests = [interest.text.strip() for interest in interest_elements]
         
         return {
             "Exhibitor": exhibitor,
             "Exhibitor Header": exhibitor_header,
             "Information": information,
-            "Links": link,
-            "Location": location,
-            "Interests": interests,
-            "Remarks": ""
+            "Links": links,
+            "Location": locations,
+            "Interests": interests
         }
     except Exception as e:
         logging.error(f"Error getting company details: {str(e)}")
         return None
+
+def process_xpath_url(driver, xpath):
+    try:
+        link = wait_for_element(driver, xpath, by=By.XPATH)
+        if link:
+            link.click()
+            wait_for_page_load(driver, timeout=30)  # 페이지가 완전히 로드될 때까지 대기
+            
+            print(f"Current URL: {driver.current_url}")
+            company_data = get_company_details(driver, driver.current_url)
+            if company_data:
+                all_companies.append(company_data)
+        else:
+            logging.warning(f"Link not found for XPath: {xpath}")
+    except Exception as e:
+        logging.error(f"Error processing link with XPath {xpath}: {str(e)}")
 
 def create_excel_file(data, filename="mwc_exhibitors.xlsx"):
     # 데이터를 Excel 파일로 생성
@@ -117,8 +150,34 @@ def create_excel_file(data, filename="mwc_exhibitors.xlsx"):
         logging.warning("No data to write to Excel file.")
         return
     
-    df = pd.DataFrame(data)
-    writer = pd.ExcelWriter(filename, engine='openpyxl')
+    # 절대 경로로 파일 경로 설정
+    filepath = os.path.abspath(filename)
+    
+    # 데이터 변환
+    transformed_data = []
+    for item in data:
+        base_data = {
+            "Exhibitor": item["Exhibitor"],
+            "Exhibitor Header 1": item["Exhibitor Header"][0],
+            "Exhibitor Header 2": item["Exhibitor Header"][1],
+            "Exhibitor Header 3": item["Exhibitor Header"][2],
+            "Exhibitor Header 4": item["Exhibitor Header"][3],
+            "Information": item["Information"]
+        }
+        # Links
+        for idx, link in enumerate(item["Links"], start=1):
+            base_data[f"Link {idx}"] = link
+        # Location
+        for idx, location in enumerate(item["Location"], start=1):
+            base_data[f"Location {idx}"] = location
+        # Interests
+        for idx, interest in enumerate(item["Interests"], start=1):
+            base_data[f"Interest {idx}"] = interest
+        
+        transformed_data.append(base_data)
+    
+    df = pd.DataFrame(transformed_data)
+    writer = pd.ExcelWriter(filepath, engine='openpyxl')
     df.to_excel(writer, index=False, sheet_name='Exhibitors')
     
     workbook = writer.book
@@ -138,60 +197,45 @@ def create_excel_file(data, filename="mwc_exhibitors.xlsx"):
         worksheet.column_dimensions[column[0].column_letter].width = max_length + 2
     
     writer.close()
-    logging.info(f"Excel file '{filename}' created successfully.")
+    logging.info(f"Excel file '{filepath}' created successfully.")
 
-def get_chromedriver_version():
-    try:
-        version = subprocess.check_output(["chromedriver", "--version"]).decode("utf-8").strip()
-        return version
-    except subprocess.CalledProcessError as e:
-        print(f"Error getting chromedriver version: {e}")
-        return None
+def handle_exit(signum, frame):
+    logging.info("Execution interrupted. Saving progress...")
+    create_excel_file(all_companies, filename="mwc_exhibitors.xlsx")
+    logging.info("Progress saved. Exiting...")
+    sys.exit(0)
 
 def main():
+    global all_companies
     driver = setup_driver()
     all_companies = []
     page = 1
     max_retries = 3
+    max_pages = 1  # 설정된 페이지 수만큼 반복
+
+    # 강제 종료 시 처리
+    signal.signal(signal.SIGINT, handle_exit)
+    signal.signal(signal.SIGTERM, handle_exit)
     
     try:
-        while True:
+        while page <= max_pages:
             url = f"https://www.mwcbarcelona.com/exhibitors?page={page}"
+            print(f"Processing URL: {url}")
             retries = 0
-            
+                        
             while retries < max_retries:
                 try:
                     driver.get(url)
                     wait_for_page_load(driver, timeout=30)  # 대기 시간을 30초로 늘림
+                    accept_cookies(driver)  # 쿠키 수락
                     
-                    for i in range(1, 25):  # 24번 반복
+                    for i in range(1, 4):  # 24번 반복
                         xpath = f'//*[@id="traversable-list-2526362"]/ul/a[{i}]'
                         print(f"Processing XPath URL: {xpath}")
-                        try:
-                            link = wait_for_element(driver, xpath, by=By.XPATH)
-                            if link:
-                                link.click()
-                                wait_for_page_load(driver, timeout=30)  # 페이지가 완전히 로드될 때까지 대기
-                                
-                                company_data = get_company_details(driver, driver.current_url)
-                                if company_data:
-                                    all_companies.append(company_data)
-                                
-                                # 이전 페이지로 이동
-                                driver.back()
-                                wait_for_page_load(driver, timeout=30)  # 페이지가 완전히 로드될 때까지 대기
-                            else:
-                                logging.warning(f"Link not found for XPath: {xpath}")
-                        except Exception as e:
-                            logging.error(f"Error processing link with XPath {xpath}: {str(e)}")
+                        process_xpath_url(driver, xpath)
                     
                     page += 1
-                    next_page_button = wait_for_element(driver, '//*[@id="item-links-2526362"]/div[3]/div/ul/li[7]/a', by=By.XPATH)
-                    if next_page_button:
-                        next_page_button.click()
-                        wait_for_page_load(driver, timeout=30)  # 대기 시간을 30초로 늘림
-                    else:
-                        break
+                    break
                     
                 except Exception as e:
                     logging.error(f"Error on page {page}: {str(e)}")
@@ -214,9 +258,5 @@ def main():
             logging.warning("No companies were processed.")
 
 if __name__ == "__main__":
-    version = get_chromedriver_version()
-    if version:
-        print(f"Chromedriver version: {version}")
-    else:
-        print("Could not determine chromedriver version.")
     main()
+

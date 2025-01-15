@@ -85,6 +85,7 @@ def get_text_or_null(driver, xpath):
 def get_company_details(driver, company_url):
     try:
         driver.get(company_url)
+        print(f"Opened URL: {company_url}")  # 새로운 URL 출력
         
         exhibitor = get_text_or_null(driver, '//*[@id="headerContainer"]/div/div[3]/nav/ul/li[5]')
         print(f"Exhibitor: {exhibitor}")
@@ -98,23 +99,23 @@ def get_company_details(driver, company_url):
         
         information = get_text_or_null(driver, '//*[@id="maincontent"]/div')
         
-        links = []
-        locations = []
-        interests = []
+        links = ["N/A"] * 6
+        locations = ["N/A"] * 6
+        interests = ["N/A"] * 6
         
         aside_elements = driver.find_elements(By.XPATH, '//*[@id="exhibitor-container"]/aside/div')
         for i, element in enumerate(aside_elements, start=1):
             heading = get_text_or_null(driver, f'//*[@id="exhibitor-container"]/aside/div[{i}]/h5')
             print(f"Heading: {heading}")
-            if heading == "CONTACTS & LINKS":
-                link_elements = driver.find_elements(By.XPATH, f'//*[@id="exhibitor-container"]/aside/div[{i}]/ul/li/a')
-                links = [link.text.strip() for link in link_elements]
-            elif heading == "LOCATION":
-                location_elements = driver.find_elements(By.XPATH, f'//*[@id="exhibitor-container"]/aside/div[{i}]/ul/p')
-                locations = [location.text.strip() for location in location_elements]
+            if heading == "CONTACT & LINKS":
+                for j in range(1, 7):
+                    links[j-1] = get_text_or_null(driver, f'//*[@id="exhibitor-container"]/aside/div[{1}]/ul/li[{j}]/a')
+            elif heading == "LOCATION":                             
+                for j in range(1, 7):
+                    locations[j-1] = get_text_or_null(driver, f'//*[@id="exhibitor-container"]/aside/div[{2}]/ul/p[{j}]')
             elif heading == "INTERESTS":
-                interest_elements = driver.find_elements(By.XPATH, f'//*[@id="exhibitor-container"]/aside/div[{i}]/ul/li')
-                interests = [interest.text.strip() for interest in interest_elements]
+                for j in range(1, 7):
+                    interests[j-1] = get_text_or_null(driver, f'//*[@id="exhibitor-container"]/aside/div[{3}]/ul/li[{j}]')
         
         return {
             "Exhibitor": exhibitor,
@@ -134,7 +135,7 @@ def process_xpath_url(driver, xpath):
         if link:
             link.click()
             wait_for_page_load(driver, timeout=30)  # 페이지가 완전히 로드될 때까지 대기
-            
+        
             print(f"Current URL: {driver.current_url}")
             company_data = get_company_details(driver, driver.current_url)
             if company_data:
@@ -165,14 +166,14 @@ def create_excel_file(data, filename="mwc_exhibitors.xlsx"):
             "Information": item["Information"]
         }
         # Links
-        for idx, link in enumerate(item["Links"], start=1):
-            base_data[f"Link {idx}"] = link
+        for idx in range(6):
+            base_data[f"Link {idx + 1}"] = item["Links"][idx]
         # Location
-        for idx, location in enumerate(item["Location"], start=1):
-            base_data[f"Location {idx}"] = location
+        for idx in range(6):
+            base_data[f"Location {idx + 1}"] = item["Location"][idx]
         # Interests
-        for idx, interest in enumerate(item["Interests"], start=1):
-            base_data[f"Interest {idx}"] = interest
+        for idx in range(6):
+            base_data[f"Interest {idx + 1}"] = item["Interests"][idx]
         
         transformed_data.append(base_data)
     
@@ -203,15 +204,27 @@ def handle_exit(signum, frame):
     logging.info("Execution interrupted. Saving progress...")
     create_excel_file(all_companies, filename="mwc_exhibitors.xlsx")
     logging.info("Progress saved. Exiting...")
+    driver.quit()  # 드라이버 종료
     sys.exit(0)
 
+def handle_popup(driver):
+    try:
+        popup_button = wait_for_element(driver, '//*[@id="onetrust-accept-btn-handler"]', by=By.XPATH, timeout=10)
+        if popup_button:
+            popup_button.click()
+            logging.info("Popup accepted.")
+        else:
+            logging.info("No popup button found.")
+    except Exception as e:
+        logging.error(f"Error handling popup: {str(e)}")
+
 def main():
-    global all_companies
+    global all_companies, driver
     driver = setup_driver()
     all_companies = []
     page = 1
     max_retries = 3
-    max_pages = 1  # 설정된 페이지 수만큼 반복
+    max_pages = 2  # 설정된 페이지 수만큼 반복
 
     # 강제 종료 시 처리
     signal.signal(signal.SIGINT, handle_exit)
@@ -219,6 +232,7 @@ def main():
     
     try:
         while page <= max_pages:
+            print(f"page: {page}")
             url = f"https://www.mwcbarcelona.com/exhibitors?page={page}"
             print(f"Processing URL: {url}")
             retries = 0
@@ -228,8 +242,9 @@ def main():
                     driver.get(url)
                     wait_for_page_load(driver, timeout=30)  # 대기 시간을 30초로 늘림
                     accept_cookies(driver)  # 쿠키 수락
+                    handle_popup(driver)  # 팝업 처리
                     
-                    for i in range(1, 4):  # 24번 반복
+                    for i in range(2, 5):  # 24번 반복
                         xpath = f'//*[@id="traversable-list-2526362"]/ul/a[{i}]'
                         print(f"Processing XPath URL: {xpath}")
                         process_xpath_url(driver, xpath)
